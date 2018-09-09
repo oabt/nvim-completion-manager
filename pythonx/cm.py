@@ -97,7 +97,7 @@ class Base:
         """
         convert vim's lnum, col into pos
         """
-        if type(src) == type(""):
+        if isinstance(src, str):
             lines = src.split('\n')
         else:
             lines = src.split(b'\n')
