@@ -344,12 +344,12 @@ class CoreHandler(cm.Base):
                         if name in self._matches:
                             self._matches[name]['enable'] = True
 
-                    if (
-                            (name in self._matches) and
-                            not self._matches[name]['refresh'] and
-                            not force and
-                            self._matches[name]['startcol'] == ctx['startcol'] and
-                            ctx.get('match_end', '') == self._matches[name]['context'].get('match_end', '')):
+                    if\
+                            (name in self._matches) and\
+                            not self._matches[name]['refresh'] and\
+                            not force and\
+                            self._matches[name]['startcol'] == ctx['startcol'] and\
+                            ctx.get('match_end', '') == self._matches[name]['context'].get('match_end', ''):
                         logger.debug('<%s> has been cached, <%s> candidates', name, len(self._matches[name]['matches']))
                         continue
 
