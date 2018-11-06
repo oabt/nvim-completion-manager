@@ -17,14 +17,16 @@ import json
 
 logger = cm.getLogger(__name__)
 
+
 # use a trick to only register the source withou loading the entire
 # module
 class CmSkipLoading(Exception):
     pass
 
+
 class CoreHandler(cm.Base):
 
-    def __init__(self,nvim):
+    def __init__(self, nvim):
 
         super().__init__(nvim)
 
@@ -37,11 +39,11 @@ class CoreHandler(cm.Base):
         self._sources = {}
         self._subscope_detectors = {}
         self._last_startcol = 0
-        self._last_matches  = []
+        self._last_matches = []
         # should be True for supporting display menu directly without cm_refresh
-        self._has_popped_up  = True
+        self._has_popped_up = True
         self._complete_timer = None
-        self._last_ctx       = None
+        self._last_ctx = None
 
         self._loaded_modules = {}
 
@@ -49,13 +51,13 @@ class CoreHandler(cm.Base):
 
         # after all sources are registered, so that all channels will be
         # started the first time cm_start_channels is called
-        self.nvim.call('cm#_core_channel_started', self.nvim.channel_id, async=True)
+        self.nvim.call('cm#_core_channel_started', self.nvim.channel_id, async_=True)
 
         # load configurations
         self._servername = self.nvim.vars['_cm_servername']
-        self._start_py   = self.nvim.vars['_cm_start_py_path']
-        self._py3        = self.nvim.vars['_cm_py3']
-        self._py2        = self.nvim.eval("get(g:,'python_host_prog','python2')")
+        self._start_py = self.nvim.vars['_cm_start_py_path']
+        self._py3 = self.nvim.vars['_cm_py3']
+        self._py2 = self.nvim.eval("get(g:,'python_host_prog','python2')")
         self._complete_delay = self.nvim.vars['cm_complete_popup_delay']
         self._completed_snippet_enable = self.nvim.vars['cm_completed_snippet_enable']
         self._completed_snippet_engine = self.nvim.vars['cm_completed_snippet_engine']
@@ -81,7 +83,7 @@ class CoreHandler(cm.Base):
             try:
                 modulename = os.path.splitext(os.path.basename(path))[0]
                 modulename = "cm_scopers.%s" % modulename
-                if modulename  in self._loaded_modules:
+                if modulename in self._loaded_modules:
                     continue
 
                 self._loaded_modules[modulename] = True
@@ -109,31 +111,31 @@ class CoreHandler(cm.Base):
             modulename = os.path.splitext(os.path.basename(path))[0]
             modulename = "cm_sources.%s" % modulename
 
-            if modulename  in self._loaded_modules:
+            if modulename in self._loaded_modules:
                 continue
 
             # use a trick to only register the source withou loading the entire
             # module
-            def register_source(name,abbreviation,priority,enable=True,events=[],python='python3',multi_thread=None,**kwargs):
+            def register_source(name, abbreviation, priority, enable=True, events=[], python='python3', multi_thread=None, **kwargs):
 
                 channel = dict(type=python,
                                module=modulename,
                                events=events)
 
-                if not multi_thread is None:
+                if multi_thread is not None:
                     channel['multi_thread'] = multi_thread
 
                 source = {}
-                source['channel']      = channel
-                source['name']         = name
-                source['priority']     = priority
-                source['enable']       = enable
+                source['channel'] = channel
+                source['name'] = name
+                source['priority'] = priority
+                source['enable'] = enable
                 source['abbreviation'] = abbreviation
                 for k in kwargs:
                     source[k] = kwargs[k]
 
-                logger.info('registering source: %s',source)
-                self.nvim.call('cm#register_source', source, async=True)
+                logger.info('registering source: %s', source)
+                self.nvim.call('cm#register_source', source, async_=True)
 
                 # use a trick to only register the source withou loading the entire
                 # module
@@ -153,7 +155,7 @@ class CoreHandler(cm.Base):
                 # restore
                 cm.register_source = old_handler
 
-    def _is_kw_futher_typing(self,info,oldctx,curctx):
+    def _is_kw_futher_typing(self, info, oldctx, curctx):
 
         old_typed = oldctx['typed']
         cur_typed = curctx['typed']
@@ -167,10 +169,10 @@ class CoreHandler(cm.Base):
         tmp_ctx1 = copy.deepcopy(oldctx)
         tmp_ctx2 = copy.deepcopy(curctx)
 
-        if not self._check_refresh_patterns(info,tmp_ctx1,True):
+        if not self._check_refresh_patterns(info, tmp_ctx1, True):
             logger.debug('oldctx _check_refresh_patterns failed')
             return False
-        if not self._check_refresh_patterns(info,tmp_ctx2,True):
+        if not self._check_refresh_patterns(info, tmp_ctx2, True):
             logger.debug('curctx _check_refresh_patterns failed')
             return False
 
@@ -178,9 +180,9 @@ class CoreHandler(cm.Base):
         # startcol is set in self._check_refresh_patterns
         return tmp_ctx1['startcol'] == tmp_ctx2['startcol']
 
-    def cm_complete(self,srcs,name,ctx,startcol,matches,refresh,outdated,current_ctx):
+    def cm_complete(self, srcs, name, ctx, startcol, matches, refresh, outdated, current_ctx):
 
-        if isinstance(name,dict):
+        if isinstance(name, dict):
             name = name['name']
 
         if name not in srcs:
@@ -195,24 +197,24 @@ class CoreHandler(cm.Base):
             if refresh:
                 logger.info("[%s] ignore outdated matching refresh=1", name)
                 return
-            if not self._is_kw_futher_typing(info,ctx,current_ctx):
+            if not self._is_kw_futher_typing(info, ctx, current_ctx):
                 logger.info("[%s] matches is outdated. ignore them.", name)
                 return
             logger.info("[%s] matches is outdated by keyword further typing. I'm gonna keep it.", name)
 
         # adjust for subscope
-        if ctx['lnum']==1:
-            startcol += ctx.get('scope_col',1)-1
+        if ctx['lnum'] == 1:
+            startcol += ctx.get('scope_col', 1) - 1
 
         self._sources = srcs
 
         try:
 
             # process the matches early to eliminate unnecessary complete function call
-            result = self.process_matches(name,ctx,startcol,matches)
+            result = self.process_matches(name, ctx, startcol, matches)
             logger.debug('<%s> preprocessing result startcol: %s matches: %s', name, startcol, result)
 
-            if (not result) and (not self._matches.get(name,{}).get('last_matches',[])):
+            if (not result) and (not self._matches.get(name, {}).get('last_matches', [])):
                 # not popping up, ignore this request
                 logger.debug('Not popping up, not refreshing for cm_complete by %s, startcol %s', name, startcol)
                 return
@@ -224,29 +226,29 @@ class CoreHandler(cm.Base):
             if name not in self._matches:
                 self._matches[name] = {}
 
-            if len(matches)==0:
+            if len(matches) == 0:
                 del self._matches[name]
             else:
                 complete_info = self._matches[name]
                 complete_info['startcol'] = startcol
-                complete_info['refresh']  = refresh
-                complete_info['matches']  = matches
-                complete_info['context']  = ctx
-                if outdated and complete_info.get('enable',False):
+                complete_info['refresh'] = refresh
+                complete_info['matches'] = matches
+                complete_info['context'] = ctx
+                if outdated and complete_info.get('enable', False):
                     # outdated, but it is keyword further typing, do not
                     # override the already enabled matches
                     complete_info['enable'] = True
                 else:
-                    complete_info['enable']   = not ctx.get('early_cache',False)
+                    complete_info['enable'] = not ctx.get('early_cache', False)
 
         # wait for _complete_timeout, reduce flashes
         if self._has_popped_up:
-            logger.info("update popup for [%s]",name)
+            logger.info("update popup for [%s]", name)
             # the ctx in parameter maybe a subctx for completion source, use
             # nvim.call to get the root context
             self._refresh_completions(self.nvim.call('cm#context'))
         else:
-            logger.debug("delay popup for [%s]",name)
+            logger.debug("delay popup for [%s]", name)
 
     def cm_insert_enter(self):
         self._matches = {}
@@ -259,8 +261,8 @@ class CoreHandler(cm.Base):
             self._complete_timer.cancel()
             self._complete_timer = None
 
-    def _on_complete_timeout(self,srcs,ctx,*args):
-        if self._last_ctx!=ctx:
+    def _on_complete_timeout(self, srcs, ctx, *args):
+        if self._last_ctx != ctx:
             logger.warn("_on_complete_timeout triggered, but last_ctx is %s, param ctx is %s", self._last_ctx, ctx)
             return
         if not self._has_popped_up:
@@ -269,7 +271,7 @@ class CoreHandler(cm.Base):
         else:
             logger.debug("ignore _on_complete_timeout for self._has_popped_up")
 
-    def cm_refresh(self,srcs,root_ctx,force=0,*args):
+    def cm_refresh(self, srcs, root_ctx, force=0, *args):
 
         root_ctx['scope'] = root_ctx['filetype']
         root_ctx['force'] = force
@@ -297,7 +299,7 @@ class CoreHandler(cm.Base):
         # simple complete done
         if root_ctx['typed'] == '':
             self._matches = {}
-        elif re.match(r'\s',root_ctx['typed'][-1]):
+        elif re.match(r'\s', root_ctx['typed'][-1]):
             self._matches = {}
 
         # do notify_sources_to_refresh
@@ -318,7 +320,7 @@ class CoreHandler(cm.Base):
 
                 try:
 
-                    if not self._check_scope(ctx,info):
+                    if not self._check_scope(ctx, info):
                         logger.debug('_check_scope ignore <%s> for context scope <%s>', name, ctx['scope'])
                         continue
 
@@ -327,8 +329,8 @@ class CoreHandler(cm.Base):
                         continue
 
                     # refresh patterns
-                    if not self._check_refresh_patterns(info,ctx,force):
-                        if not force and info['early_cache'] and self._check_refresh_patterns(info,ctx,True):
+                    if not self._check_refresh_patterns(info, ctx, force):
+                        if not force and info['early_cache'] and self._check_refresh_patterns(info, ctx, True):
                             # early cache
                             ctx['early_cache'] = True
                             logger.debug('<%s> early_caching', name)
@@ -342,13 +344,12 @@ class CoreHandler(cm.Base):
                         if name in self._matches:
                             self._matches[name]['enable'] = True
 
-                    if (
-                            (name in self._matches) and 
-                            not self._matches[name]['refresh'] and 
-                            not force and 
-                            self._matches[name]['startcol']==ctx['startcol'] and
-                            ctx.get('match_end', '') == self._matches[name]['context'].get('match_end', '')
-                        ):
+                    if\
+                            (name in self._matches) and\
+                            not self._matches[name]['refresh'] and\
+                            not force and\
+                            self._matches[name]['startcol'] == ctx['startcol'] and\
+                            ctx.get('match_end', '') == self._matches[name]['context'].get('match_end', ''):
                         logger.debug('<%s> has been cached, <%s> candidates', name, len(self._matches[name]['matches']))
                         continue
 
@@ -361,7 +362,7 @@ class CoreHandler(cm.Base):
                         if 'id' not in channel:
                             self._start_channel(info)
 
-                    channel = info.get('channel',{})
+                    channel = info.get('channel', {})
                     if 'id' in channel:
                         refreshes_channels.append(dict(name=name, id=channel['id'], context=ctx))
                 except Exception as ex:
@@ -373,22 +374,22 @@ class CoreHandler(cm.Base):
             self._refresh_completions(root_ctx)
             self._has_popped_up = True
         else:
-            logger.info('notify_sources_to_refresh calls cnt [%s], channels cnt [%s]',len(refreshes_calls),len(refreshes_channels))
+            logger.info('notify_sources_to_refresh calls cnt [%s], channels cnt [%s]', len(refreshes_calls), len(refreshes_channels))
             logger.debug('cm#_notify_sources_to_refresh [%s] [%s] [%s]', [e['name'] for e in refreshes_calls], [e['name'] for e in refreshes_channels], root_ctx)
-            self.nvim.call('cm#_notify_sources_to_refresh', refreshes_calls, refreshes_channels, root_ctx, async=True)
+            self.nvim.call('cm#_notify_sources_to_refresh', refreshes_calls, refreshes_channels, root_ctx, async_=True)
 
             # complete delay timer
             def on_timeout():
                 self.nvim.async_call(self._on_complete_timeout, srcs, root_ctx)
-            self._complete_timer = threading.Timer(float(self._complete_delay)/1000, on_timeout )
+            self._complete_timer = threading.Timer(float(self._complete_delay) / 1000, on_timeout)
             self._complete_timer.start()
 
-    def _get_ctx_list(self,root_ctx):
-        ctx_list = [root_ctx,]
+    def _get_ctx_list(self, root_ctx):
+        ctx_list = [root_ctx, ]
 
         # scoping
         i = 0
-        while i<len(ctx_list):
+        while i < len(ctx_list):
             ctx = ctx_list[i]
             scope = ctx['scope']
             if scope in self._subscope_detectors:
@@ -398,11 +399,11 @@ class CoreHandler(cm.Base):
                         if sub_ctx:
                             # adjust offset to global based and add the new
                             # context
-                            sub_ctx['scope_offset'] += ctx.get('scope_offset',0)
-                            sub_ctx['scope_lnum'] += ctx.get('scope_lnum',1)-1
+                            sub_ctx['scope_offset'] += ctx.get('scope_offset', 0)
+                            sub_ctx['scope_lnum'] += ctx.get('scope_lnum', 1) - 1
                             if int(sub_ctx['lnum']) == 1:
-                                sub_ctx['typed'] = sub_ctx['typed'][sub_ctx['scope_col']-1:]
-                                sub_ctx['scope_col'] += ctx.get('scope_col',1)-1
+                                sub_ctx['typed'] = sub_ctx['typed'][sub_ctx['scope_col'] - 1:]
+                                sub_ctx['scope_col'] += ctx.get('scope_col', 1) - 1
                                 logger.info('adjusting scope_col')
                             ctx_list.append(sub_ctx)
                             logger.info('new sub context: %s', sub_ctx)
@@ -414,7 +415,7 @@ class CoreHandler(cm.Base):
             return ctx_list
 
 
-    def _check_refresh_patterns(self,info,ctx,force=False):
+    def _check_refresh_patterns(self, info, ctx, force=False):
 
         # Concept of ctx['match_end']:
         #   for cm_refresh_pattern `\/`, and word pattern `[a-z/]`
@@ -422,24 +423,24 @@ class CoreHandler(cm.Base):
         #   foo/bar/baz gets `foo/bar/`
         # It is useful for trigerring cm_refresh in the middle of a word
 
-        patterns = info.get('cm_refresh_patterns',None)
+        patterns = info.get('cm_refresh_patterns', None)
         typed = ctx['typed']
 
         word_pattern = info.get('word_pattern', None) or cm_default.word_pattern(ctx)
 
         # remove the last word, check whether the special pattern matches
         # word_removed
-        end_word_matched = re.search(word_pattern + "$",typed)
+        end_word_matched = re.search(word_pattern + "$", typed)
         if end_word_matched:
-            ctx['base']       = end_word_matched.group()
-            ctx['startcol']   = ctx['col'] - len(ctx['base'].encode('utf-8'))
-            word_removed      = typed[:end_word_matched.start()]
-            word_len          = len(ctx['base'])
+            ctx['base'] = end_word_matched.group()
+            ctx['startcol'] = ctx['col'] - len(ctx['base'].encode('utf-8'))
+            word_removed = typed[:end_word_matched.start()]
+            word_len = len(ctx['base'])
         else:
-            ctx['base']       = ''
-            ctx['startcol']   = ctx['col']
-            word_removed      = typed
-            word_len          = 0
+            ctx['base'] = ''
+            ctx['startcol'] = ctx['col']
+            word_removed = typed
+            word_len = 0
 
         ctx['match_end'] = len(word_removed)
 
@@ -452,17 +453,17 @@ class CoreHandler(cm.Base):
                     pattern = '.*' + pattern
 
                 matched = re.search(pattern, typed)
-                if matched and matched.end() >= len(typed)-word_len:
+                if matched and matched.end() >= len(typed) - word_len:
                     ctx['match_end'] = matched.end()
                     return True
 
         min_len = info['cm_refresh_length']
 
         # always match
-        if min_len==0:
+        if min_len == 0:
             return True
 
-        if force and word_len>0:
+        if force and word_len > 0:
             return True
 
         if min_len > 0 and word_len >= min_len:
@@ -471,10 +472,10 @@ class CoreHandler(cm.Base):
         return False
 
     # almost the same as `s:check_scope` in `autoload/cm.vim`
-    def _check_scope(self,ctx,info):
-        scopes = info.get('scopes',None)
-        cur_scope = ctx.get('scope',ctx['filetype'])
-        is_root_scope = ( cur_scope==ctx['filetype'] )
+    def _check_scope(self, ctx, info):
+        scopes = info.get('scopes', None)
+        cur_scope = ctx.get('scope', ctx['filetype'])
+        is_root_scope = (cur_scope == ctx['filetype'])
         ctx['scope_match'] = ''
         if not scopes:
             # scopes setting is None, means that this is a general purpose
@@ -484,15 +485,15 @@ class CoreHandler(cm.Base):
             else:
                 return False
         for scope in scopes:
-            if scope==cur_scope:
+            if scope == cur_scope:
                 ctx['scope_match'] = scope
-                if info.get('scoping',False):
+                if info.get('scoping', False):
                     return True
                 else:
                     return is_root_scope
         return False
 
-    def _refresh_completions(self,ctx):
+    def _refresh_completions(self, ctx):
         """
         Note: This function is called via greenlet coroutine. Be careful, avoid
         using blocking requirest.
@@ -501,9 +502,9 @@ class CoreHandler(cm.Base):
         matches = []
 
         # sort by priority
-        names = sorted(self._matches.keys(),key=lambda x: self._sources[x]['priority'], reverse=True)
+        names = sorted(self._matches.keys(), key=lambda x: self._sources[x]['priority'], reverse=True)
 
-        if len(names)==0:
+        if len(names) == 0:
             # empty
             logger.info('_refresh_completions names: %s, startcol: %s, matches: %s', names, ctx['col'], [])
             self._complete(ctx, ctx['col'], [])
@@ -520,18 +521,18 @@ class CoreHandler(cm.Base):
                 self._matches[name]['last_matches'] = []
 
                 # may be disabled due to early_cache
-                if not self._matches[name].get('enable',True):
+                if not self._matches[name].get('enable', True):
                     logger.debug('<%s> ignore by disabled', name)
                     continue
 
                 source_startcol = self._matches[name]['startcol']
-                if source_startcol>col or source_startcol==0:
+                if source_startcol > col or source_startcol == 0:
                     self._matches[name]['last_matches'] = []
                     logger.error('ignoring invalid startcol for %s %s', name, self._matches[name]['startcol'])
                     continue
 
                 source_matches = self._matches[name]['matches']
-                source_matches = self.process_matches(name,ctx,source_startcol,source_matches)
+                source_matches = self.process_matches(name, ctx, source_startcol, source_matches)
 
                 self._matches[name]['last_matches'] = source_matches
 
@@ -555,7 +556,7 @@ class CoreHandler(cm.Base):
                 if not source_matches:
                     continue
 
-                prefix = ctx['typed'][startcol-1 : source_startcol-1]
+                prefix = ctx['typed'][startcol - 1: source_startcol - 1]
 
                 for e in source_matches:
                     # do the padding in vimscript to avoid the rpc
@@ -573,21 +574,22 @@ class CoreHandler(cm.Base):
                 continue
 
         if not matches:
-            startcol=len(ctx['typed']) or 1
+            startcol = len(ctx['typed']) or 1
         logger.info('_refresh_completions names: %s, startcol: %s, matches cnt: %s', names, startcol, len(matches))
         logger.debug('_refresh_completions names: %s, startcol: %s, matches: %s, source matches: %s', names, startcol, matches, self._matches)
         self._complete(ctx, startcol, matches)
 
-    def process_matches(self,name,ctx,startcol,matches):
+    def process_matches(self, name, ctx, startcol, matches):
 
         info = self._sources[name]
-        abbr = info.get('abbreviation','')
+        abbr = info.get('abbreviation', '')
 
         # formalize datastructure
         formalized = []
         for item in matches:
             e = {}
-            if type(item)==type(''):
+            # if type(item) == type(''):
+            if isinstance(item, str):
                 e['word'] = item
             else:
                 e = copy.deepcopy(item)
@@ -595,15 +597,15 @@ class CoreHandler(cm.Base):
             formalized.append(e)
 
         # filtering and sorting
-        result = self.matcher.process(info,ctx,startcol,formalized)
+        result = self.matcher.process(info, ctx, startcol, formalized)
 
         # fix some text
         for e in result:
 
             if 'menu' not in e:
-                if 'info' in e and e['info'] and len(e['info'])<50:
+                if 'info' in e and e['info'] and len(e['info']) < 50:
                     if abbr:
-                        e['menu'] = "<%s> %s" % (abbr,e['info'])
+                        e['menu'] = "<%s> %s" % (abbr, e['info'])
                     else:
                         e['menu'] = e['info']
                 else:
@@ -623,7 +625,7 @@ class CoreHandler(cm.Base):
             logger.info('matches==0, _last_matches==0, ignore')
             return
         not_changed = 0
-        if self._last_startcol==startcol and self._last_matches==matches:
+        if self._last_startcol == startcol and self._last_matches == matches:
             not_changed = 1
             logger.info('ignore _complete call: self._last_startcol==startcol and self._last_matches==matches')
 
@@ -669,23 +671,23 @@ class CoreHandler(cm.Base):
         self._last_startcol = startcol
 
 
-    def _start_channel(self,info):
+    def _start_channel(self, info):
 
         if 'channel' not in info:
             logger.error("this source does not use channel: %s", info)
             return
 
-        name         = info['name']
-        channel      = info['channel']
-        channel_type = channel.get('type','')
+        name = info['name']
+        channel = info['channel']
+        channel_type = channel.get('type', '')
 
         py = ''
-        if channel_type=='python3':
+        if channel_type == 'python3':
             py = self._py3
-        elif channel_type=='python2':
+        elif channel_type == 'python2':
             py = self._py2
         else:
-            logger.info("Unsupported channel_type [%s]",channel_type)
+            logger.info("Unsupported channel_type [%s]", channel_type)
 
         if name not in self._channel_processes:
             self._channel_processes[name] = {}
@@ -699,22 +701,22 @@ class CoreHandler(cm.Base):
         if 'proc' in process_info or 'thread' in thread_info:
             return
 
-        if self._multi_thread and channel_type=='python3' and channel.get('multi_thread',1) and sys.version_info.major>=3:
+        if self._multi_thread and channel_type == 'python3' and channel.get('multi_thread', 1) and sys.version_info.major >= 3:
             logger.info("starting <%s> thread channel", name)
             thread_info['thread'] = threading.Thread(
-                    target=cm.start_and_run_channel,
-                    name=name,
-                    args=('channel', self._servername, name, channel['module'])
-                    )
+                target=cm.start_and_run_channel,
+                name=name,
+                args=('channel', self._servername, name, channel['module'])
+            )
             thread_info['thread'].start()
             return
 
         cmd = [py, self._start_py, 'channel', name, channel['module'], self._servername]
 
         # has not been started yet, start it now
-        logger.info('starting channels for %s: %s',name, cmd)
+        logger.info('starting channels for %s: %s', name, cmd)
 
-        proc = subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=sys.stdout,stderr=sys.stderr)
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=sys.stderr)
         process_info['pid'] = proc.pid
         process_info['proc'] = proc
 
@@ -747,7 +749,7 @@ class CoreHandler(cm.Base):
                 if proc.poll() is not None:
                     logger.info("channel %s already terminated", name)
                     continue
-                procs.append((name,proc))
+                procs.append((name, proc))
                 logger.info("terminating channel %s", name)
                 proc.terminate()
             except Exception as ex:
@@ -760,7 +762,7 @@ class CoreHandler(cm.Base):
         time.sleep(1)
 
         # kill all
-        for name,proc in procs:
+        for name, proc in procs:
             try:
                 if proc.poll() is not None:
                     logger.info("channel %s has terminated", name)
@@ -771,9 +773,9 @@ class CoreHandler(cm.Base):
             except Exception as ex:
                 logger.exception("send kill signal failed for %s", name)
 
-    def cm_start_channels(self,srcs,ctx):
+    def cm_start_channels(self, srcs, ctx):
 
-        names = sorted(srcs.keys(),key=lambda n: srcs[n]['priority'], reverse=True)
+        names = sorted(srcs.keys(), key=lambda n: srcs[n]['priority'], reverse=True)
         for name in names:
 
             info = srcs[name]
@@ -786,10 +788,10 @@ class CoreHandler(cm.Base):
                 continue
 
             # channel already started
-            if info['channel'].get('id',None):
+            if info['channel'].get('id', None):
                 continue
 
-            if not self._check_scope(ctx,info):
+            if not self._check_scope(ctx, info):
                 continue
 
             self._start_channel(info)

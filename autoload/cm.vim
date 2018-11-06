@@ -357,7 +357,7 @@ endfunc
 
 
 function! s:on_core_channel_error(job_id, data, event)
-    echoe join(a:data,"\n")
+    silent! echoe join(a:data,"\n")
 endfunction
 
 func! s:start_core_channel(...)
